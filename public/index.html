@@ -37,7 +37,11 @@
 
     <!-- DUEL -->
     <section id="duel" class="view" hidden>
-      <p class="duel-q">Which is more <span id="duel-mode" class="mode">overrated</span>?</p>
+      <div class="duel-q">
+        Which is more
+        <span class="mode-switch" role="radiogroup" aria-label="Question">
+          <button role="radio" class="mode over" data-mode="over" aria-checked="true">overrated</button><button role="radio" class="mode under" data-mode="under" aria-checked="false">underrated</button></span>?
+      </div>
       <div class="duel-grid">
         <button class="side" id="duel-a"><span class="thing fit"></span><span class="meta"></span><kbd>&larr;</kbd></button>
         <span class="vs">vs</span>

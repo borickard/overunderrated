@@ -123,6 +123,26 @@ for (const [kind, make] of Object.entries(backends)) {
     for (const n of ['One', 'Two', 'Three', 'Four']) await s.add(n);
     const p = await s.duelPair('v');
     assert.notEqual(p.a.id, p.b.id);
-    assert.ok(['over', 'under'].includes(p.mode));
+    assert.equal(p.mode, 'over');
+    assert.ok((await s.duelPair('v', 'sideways')).error);
+  });
+
+  test(`${kind}: duelPair draws from the side the question is about`, async () => {
+    const s = await fresh();
+    const over = [], under = [];
+    for (const n of ['Hype one', 'Hype two', 'Hype three']) over.push((await s.add(n)).item.id);
+    for (const n of ['Gem one', 'Gem two', 'Gem three']) under.push((await s.add(n)).item.id);
+    for (let i = 0; i < 3; i++) {
+      for (const id of over) await s.vote('v' + i, id, 1);
+      for (const id of under) await s.vote('v' + i, id, -1);
+    }
+    for (let i = 0; i < 10; i++) {
+      const o = await s.duelPair('x' + i, 'over');
+      assert.equal(o.mode, 'over');
+      assert.ok(over.includes(o.a.id) && over.includes(o.b.id));
+      const u = await s.duelPair('x' + i, 'under');
+      assert.equal(u.mode, 'under');
+      assert.ok(under.includes(u.a.id) && under.includes(u.b.id));
+    }
   });
 }

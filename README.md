@@ -2,8 +2,8 @@
 
 A crowd game: anyone adds a thing, everyone else votes whether it's **overrated** or **underrated**, and the results become two toplists.
 
-- **Rate** — one thing at a time, huge. Hit *Overrated* (← / `o`) or *Underrated* (→ / `u`), see how the crowd split, move on. `space` skips.
-- **Duel** — two things that sit close together in the ranking go head to head: *"Which is more overrated?"* (or underrated, depending on which side of the scale they're on). This fine-tunes the order when the votes are close.
+- **Rate** — one thing at a time, huge. Hit *Overrated* (← / `o`) or *Underrated* (→ / `u`), the next thing drops in instantly and the crowd split for the one you just rated shows underneath. `space` skips.
+- **Duel** — pick the question, *"Which is more overrated?"* or *"Which is more underrated?"* (`o` / `u`), then choose between two things that sit close together on that side of the ranking. This fine-tunes the order when the votes are close.
 - **Top** — most overrated and most underrated, ranked.
 - **Add** — anything in English, up to 60 characters. Near-duplicates (`The Beatles` / `beatles!`) are merged.
 

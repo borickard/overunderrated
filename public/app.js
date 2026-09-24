@@ -2,7 +2,6 @@
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(path, body) {
   let res;
@@ -77,77 +76,122 @@ addEventListener('popstate', () => show(viewFromPath(location.pathname), false))
 
 /* ---------------- Rate ---------------- */
 const Rate = (() => {
-  const nameEl = $('#rate-name');
+  const stage = $('.stage');
   const resultEl = $('#rate-result');
   const choices = $('.choices');
+  const SWAP_MS = 260; // keep in sync with --swap in style.css
+  let nameEl = $('#rate-name');
   let item = null;
+  let upcoming = null; // promise of the next /api/next response, fetched ahead
   let busy = false;
   let loaded = false;
 
-  function size() {
+  const fetchNext = (exclude) => api('/api/next?exclude=' + exclude.filter(Boolean).join(','));
+
+  function size(el = nameEl) {
     if (current !== 'rate') return;
-    fit(nameEl, { maxH: innerHeight * 0.42, max: Math.min(320, Math.max(innerWidth * 0.2, 120)) });
+    fit(el, { maxH: innerHeight * 0.42, max: Math.min(320, Math.max(innerWidth * 0.2, 120)) });
   }
 
-  async function load(exclude) {
-    const data = await api('/api/next' + (exclude ? `?exclude=${exclude}` : ''));
+  function label(data) {
+    return data.item ? data.item.name : data.error ? 'Hold on.' : 'Nothing here yet.';
+  }
+
+  function note(text) {
+    resultEl.textContent = '';
+    if (!text) return;
+    const p = document.createElement('p');
+    p.className = 'kicker';
+    p.textContent = text;
+    resultEl.append(p);
+  }
+
+  function statusNote(data) {
+    if (data.error) note(data.error);
+    else if (data.item && !data.fresh) note('You have rated everything. Change your mind, or add something new.');
+  }
+
+  // Crowd result for the thing you just voted on. Static, so it never slows you down.
+  function showResult(it) {
+    resultEl.innerHTML = `
+      <p class="last"><b></b> · <span class="o">${it.overPct}% overrated</span> / <span class="u">${100 - it.overPct}% underrated</span> · ${it.votes} vote${it.votes === 1 ? '' : 's'}</p>
+      <div class="split"><i class="o" style="width:${it.overPct}%"></i><i class="u" style="width:${100 - it.overPct}%"></i></div>`;
+    $('.last b', resultEl).textContent = it.name;
+  }
+
+  // Old name drops down and fades out while the new one drops in from above, at the same time.
+  function swapTo(data) {
+    const old = nameEl;
+    const next = old.cloneNode(false);
+    next.removeAttribute('id');
+    next.textContent = label(data);
+    old.removeAttribute('id');
+    next.id = 'rate-name';
+
+    const box = old.getBoundingClientRect();
+    const parent = stage.getBoundingClientRect();
+    old.style.position = 'absolute';
+    old.style.left = box.left - parent.left + 'px';
+    old.style.top = box.top - parent.top + 'px';
+    old.style.width = box.width + 'px';
+    old.style.margin = '0';
+    old.classList.add('leave');
+    old.after(next);
+    nameEl = next;
+    size(next);
+    next.classList.add('enter');
+    setTimeout(() => {
+      old.remove();
+      next.classList.remove('enter');
+    }, SWAP_MS);
+  }
+
+  async function advance(prevId) {
+    const data = await upcoming;
     item = data.item;
-    nameEl.classList.add('in');
-    nameEl.textContent = item ? item.name : data.error ? 'Hold on.' : 'Nothing here yet.';
-    resultEl.innerHTML = '';
-    if (data.error) {
-      const p = document.createElement('p');
-      p.className = 'kicker';
-      p.textContent = data.error;
-      resultEl.append(p);
-    } else if (item && !data.fresh) {
-      resultEl.innerHTML = '<p class="kicker">You have rated everything. Change your mind, or add something new.</p>';
-    }
-    choices.classList.remove('voted');
-    $$('.choice', choices).forEach((b) => b.classList.remove('picked'));
-    size();
-    requestAnimationFrame(() => requestAnimationFrame(() => nameEl.classList.remove('in')));
+    swapTo(data);
+    upcoming = fetchNext([item?.id, prevId]);
+    return data;
   }
 
-  async function advance(exclude) {
-    nameEl.classList.add('out');
-    await sleep(180);
-    nameEl.classList.remove('out');
-    await load(exclude);
+  async function load() {
+    const data = await fetchNext([]);
+    item = data.item;
+    nameEl.textContent = label(data);
+    statusNote(data);
+    size();
+    upcoming = fetchNext([item?.id]);
   }
 
   async function vote(dir) {
     if (busy || !item) return;
     busy = true;
-    choices.classList.add('voted');
-    $(`.choice[data-dir="${dir}"]`, choices).classList.add('picked');
-    const data = await api('/api/vote', { id: item.id, dir });
-    if (data.error) {
-      toast(data.error);
-      choices.classList.remove('voted');
-      busy = false;
-      return;
-    }
-    const it = data.item;
-    const agree = dir === 1 ? it.overPct : 100 - it.overPct;
-    resultEl.innerHTML = `
-      <div class="split"><i class="o" style="width:50%"></i><i class="u" style="width:50%"></i></div>
-      <div class="split-labels"><span class="o">${it.overPct}% overrated</span><span class="u">${100 - it.overPct}% underrated</span></div>`;
-    requestAnimationFrame(() => {
-      $('.split .o', resultEl).style.width = it.overPct + '%';
-      $('.split .u', resultEl).style.width = 100 - it.overPct + '%';
-    });
-    if (it.votes > 1) toast(`${agree}% agree with you · ${it.votes} votes`);
-    await sleep(1100);
-    await advance(item.id);
-    busy = false;
+    const prev = item;
+    const button = $(`.choice[data-dir="${dir}"]`, choices);
+    button.classList.add('picked');
+    setTimeout(() => button.classList.remove('picked'), 160);
+    const saved = api('/api/vote', { id: prev.id, dir });
+    const data = await advance(prev.id);
+    statusNote(data);
+    setTimeout(() => (busy = false), SWAP_MS * 0.6);
+    const res = await saved;
+    if (res.error) toast(res.error);
+    else if (item !== prev && !data.error) showResult(res.item);
+  }
+
+  async function skip() {
+    if (busy || !item) return;
+    busy = true;
+    note('');
+    statusNote(await advance(item.id));
+    setTimeout(() => (busy = false), SWAP_MS * 0.6);
   }
 
   choices.addEventListener('click', (e) => {
     const b = e.target.closest('.choice');
     if (b) vote(Number(b.dataset.dir));
   });
-  $('#rate-skip').addEventListener('click', () => !busy && item && advance(item.id));
+  $('#rate-skip').addEventListener('click', skip);
 
   return {
     enter() {
@@ -156,9 +200,9 @@ const Rate = (() => {
     key(k) {
       if (k === 'ArrowLeft' || k === 'o') vote(1);
       else if (k === 'ArrowRight' || k === 'u') vote(-1);
-      else if (k === ' ') $('#rate-skip').click();
+      else if (k === ' ') skip();
     },
-    size,
+    size: () => size(),
   };
 })();
 
@@ -166,14 +210,29 @@ const Rate = (() => {
 const Duel = (() => {
   const root = $('#duel');
   const grid = $('.duel-grid');
-  const modeEl = $('#duel-mode');
   const emptyEl = $('#duel-empty');
   const sides = { a: $('#duel-a'), b: $('#duel-b') };
   let pair = null;
   let busy = false;
+  let seq = 0; // ignore responses that arrive after the question was switched
+  let mode = 'over';
+  try { if (localStorage.getItem('duelMode') === 'under') mode = 'under'; } catch {}
+
+  function setMode(m, reload = true) {
+    if (m !== 'over' && m !== 'under') return;
+    const changed = m !== mode;
+    mode = m;
+    try { localStorage.setItem('duelMode', m); } catch {}
+    $$('.mode-switch .mode').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
+    root.classList.toggle('over', m === 'over');
+    root.classList.toggle('under', m === 'under');
+    if (reload && changed) load();
+  }
 
   function meta(it) {
-    return it.votes ? `${it.overPct}% say overrated · ${it.votes} vote${it.votes === 1 ? '' : 's'}` : 'No votes yet';
+    if (!it.votes) return 'No votes yet';
+    const pct = mode === 'over' ? `${it.overPct}% say overrated` : `${100 - it.overPct}% say underrated`;
+    return `${pct} · ${it.votes} vote${it.votes === 1 ? '' : 's'}`;
   }
 
   function size() {
@@ -189,7 +248,9 @@ const Duel = (() => {
   }
 
   async function load() {
-    const data = await api('/api/duel');
+    const mine = ++seq;
+    const data = await api('/api/duel?mode=' + mode);
+    if (mine !== seq) return;
     grid.classList.remove('done');
     Object.values(sides).forEach((s) => s.classList.remove('picked'));
     if (data.error) {
@@ -204,10 +265,6 @@ const Duel = (() => {
     grid.hidden = false;
     $('#duel-skip').hidden = false;
     emptyEl.hidden = true;
-    root.classList.toggle('over', data.mode === 'over');
-    root.classList.toggle('under', data.mode === 'under');
-    modeEl.className = 'mode ' + data.mode;
-    modeEl.textContent = data.mode === 'over' ? 'overrated' : 'underrated';
     for (const k of ['a', 'b']) {
       $('.thing', sides[k]).textContent = data[k].name;
       $('.meta', sides[k]).textContent = meta(data[k]);
@@ -222,7 +279,6 @@ const Duel = (() => {
     grid.classList.add('done');
     const data = await api('/api/duel', { a: pair.a.id, b: pair.b.id, winner: pair[k].id, mode: pair.mode });
     if (data.error) toast(data.error);
-    await sleep(650);
     await load();
     busy = false;
   }
@@ -230,12 +286,16 @@ const Duel = (() => {
   sides.a.addEventListener('click', () => pick('a'));
   sides.b.addEventListener('click', () => pick('b'));
   $('#duel-skip').addEventListener('click', () => !busy && load());
+  $$('.mode-switch .mode').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  setMode(mode, false);
 
   return {
     enter: load,
     key(k) {
       if (k === 'ArrowLeft' || k === 'ArrowUp') pick('a');
       else if (k === 'ArrowRight' || k === 'ArrowDown') pick('b');
+      else if (k === 'o') setMode('over');
+      else if (k === 'u') setMode('under');
       else if (k === ' ') $('#duel-skip').click();
     },
     size,
@@ -254,7 +314,7 @@ const Top = (() => {
     }
     el.innerHTML = list.map((it, i) => {
       const pct = kind === 'overrated' ? it.overPct : 100 - it.overPct;
-      return `<li style="animation-delay:${Math.min(i, 12) * 30}ms">
+      return `<li>
         <span class="n">${i + 1}</span>
         <span class="name">${esc(it.name)}</span>
         <span class="pct"><b>${pct}%</b><small>${it.votes} vote${it.votes === 1 ? '' : 's'}</small></span>

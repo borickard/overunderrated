@@ -5,9 +5,14 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(path, body) {
-  const res = await fetch(path, body
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    : undefined);
+  let res;
+  try {
+    res = await fetch(path, body
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      : undefined);
+  } catch {
+    return { error: 'Could not reach the server. Check your connection.' };
+  }
   const data = await res.json().catch(() => ({ error: 'Something went wrong.' }));
   if (!res.ok && !data.error) data.error = 'Something went wrong.';
   return data;
@@ -88,10 +93,16 @@ const Rate = (() => {
     const data = await api('/api/next' + (exclude ? `?exclude=${exclude}` : ''));
     item = data.item;
     nameEl.classList.add('in');
-    nameEl.textContent = item ? item.name : 'Nothing here yet.';
-    resultEl.innerHTML = item && !data.fresh
-      ? '<p class="kicker">You have rated everything. Change your mind, or add something new.</p>'
-      : '';
+    nameEl.textContent = item ? item.name : data.error ? 'Hold on.' : 'Nothing here yet.';
+    resultEl.innerHTML = '';
+    if (data.error) {
+      const p = document.createElement('p');
+      p.className = 'kicker';
+      p.textContent = data.error;
+      resultEl.append(p);
+    } else if (item && !data.fresh) {
+      resultEl.innerHTML = '<p class="kicker">You have rated everything. Change your mind, or add something new.</p>';
+    }
     choices.classList.remove('voted');
     $$('.choice', choices).forEach((b) => b.classList.remove('picked'));
     size();
@@ -266,7 +277,7 @@ const Top = (() => {
       const data = await api('/api/top');
       render(data.overrated || [], $('#list-overrated'), 'overrated');
       render(data.underrated || [], $('#list-underrated'), 'underrated');
-      $('#top-foot').textContent = `${data.total} things so far. Ranked by votes, fine-tuned by head-to-head duels.`;
+      $('#top-foot').textContent = data.error || `${data.total} things so far. Ranked by votes, fine-tuned by head-to-head duels.`;
     },
     key(k) {
       if (k === 'ArrowLeft') select('overrated');

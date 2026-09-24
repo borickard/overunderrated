@@ -1,13 +1,22 @@
 {
   "name": "overunderrated",
   "version": "1.0.0",
+  "private": true,
   "description": "Crowd-rated toplist of the most overrated and underrated things.",
-  "main": "server.js",
   "type": "commonjs",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
-    "start": "node --no-warnings=ExperimentalWarning server.js",
+    "dev": "node --no-warnings=ExperimentalWarning local-server.js",
+    "start": "node --no-warnings=ExperimentalWarning local-server.js",
     "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
   },
-  "license": "MIT"
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
+  }
 }

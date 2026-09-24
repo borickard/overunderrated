@@ -7,36 +7,46 @@ A crowd game: anyone adds a thing, everyone else votes whether it's **overrated*
 - **Top** — most overrated and most underrated, ranked.
 - **Add** — anything in English, up to 60 characters. Near-duplicates (`The Beatles` / `beatles!`) are merged.
 
-## Run it
+## Deploy on Vercel
 
-Requires Node.js 22.5+ (uses the built-in `node:sqlite`, no npm dependencies).
+The site is static files in `public/` plus serverless functions in `api/`. Votes are stored in Postgres, because Vercel functions have no persistent disk.
+
+1. In the Vercel project, open **Storage → Create Database → Neon (Postgres)** and connect it to the project. This sets `DATABASE_URL` for every environment.
+2. Redeploy. Tables are created and 30 starter things are seeded on the first request.
+
+Without a database the API answers `503` with a message saying so, and the page shows it.
+
+## Run locally
+
+Requires Node.js 22.5+. Locally it uses SQLite (the built-in `node:sqlite`) in `data/`, so no database setup is needed. Set `DATABASE_URL` to use Postgres instead.
 
 ```sh
-npm start            # http://localhost:3000
-PORT=8080 DATA_DIR=/var/lib/overunderrated npm start
-npm test
+npm install
+npm run dev          # http://localhost:3000
+npm test             # runs every store test against SQLite and Postgres (PGlite)
 ```
-
-Data lives in `data/overunderrated.db` (SQLite) unless `DATA_DIR` is set. An empty database is seeded with 30 starter things.
 
 ## How scoring works
 
 Each thing has two signals:
 
 1. **Votes.** `lean = (over − under) / (over + under + 4)`. The `+4` pulls things with few votes toward neutral so one vote can't top the chart.
-2. **Duels.** An Elo rating on one axis, higher = more overrated. Picking A in "which is more overrated?" moves A up; picking A in "which is more underrated?" moves A down.
+2. **Duels.** Each duel is a win on the overrated axis for whichever thing was judged more overrated (in "which is more underrated?", the one *not* picked). `duelLean = (wins − losses) / (duels + 4)`.
 
-`score = lean + 0.15 · tanh((elo − 1500) / 200)` — duels can shift a score by at most ±0.15, so they reorder close neighbours without overriding a clear vote majority. Things need 3 votes to appear on the toplists (relaxed while the site is new).
+`score = lean + 0.15 · duelLean` — duels can shift a score by at most ±0.15, so they reorder close neighbours without overriding a clear vote majority. Things need 3 votes to appear on the toplists (relaxed while the site is new).
 
 Each browser gets an anonymous cookie; one vote per thing per browser (you can change it), one duel per pair per browser. Writes are rate-limited per IP.
 
 ## Layout
 
 ```
-server.js        HTTP server, JSON API, static files, rate limiting
-store.js         SQLite schema, validation, scoring, matchmaking
+api/             Vercel serverless entry points (one per route, all share lib/api.js)
+lib/api.js       Request handling, anonymous voter cookie, rate limiting
+lib/store.js     Validation, scoring, matchmaking, SQL
+lib/db.js        Postgres (Neon serverless driver) / SQLite adapter and schema
+local-server.js  Local dev server: static files + the same API handler
 public/          Single-page frontend (vanilla JS/CSS), self-hosted Bricolage Grotesque (OFL)
-test/            node:test unit tests for the store
+test/            node:test tests for the store, run on both databases
 ```
 
 ### API

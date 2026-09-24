@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Overrated / Underrated</title>
+  <meta name="description" content="Add anything. The crowd decides if it's overrated or underrated.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="logo" href="/" data-view="rate"><span class="o">Over</span>/<span class="u">Under</span></a>
+    <nav>
+      <a href="/" data-view="rate">Rate</a>
+      <a href="/duel" data-view="duel">Duel</a>
+      <a href="/top" data-view="top">Top</a>
+      <a href="/add" data-view="add" class="add-link">+ Add</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- RATE -->
+    <section id="rate" class="view" hidden>
+      <div class="stage">
+        <p class="kicker">Is it&hellip;</p>
+        <h1 class="thing fit" id="rate-name">&nbsp;</h1>
+        <div class="result" id="rate-result" aria-live="polite"></div>
+      </div>
+      <div class="choices">
+        <button class="choice over" data-dir="1"><span class="arrow">&uarr;</span><span class="label">Overrated</span><kbd>&larr;</kbd></button>
+        <button class="choice under" data-dir="-1"><span class="arrow">&darr;</span><span class="label">Underrated</span><kbd>&rarr;</kbd></button>
+      </div>
+      <button class="skip" id="rate-skip">Skip <kbd>space</kbd></button>
+    </section>
+
+    <!-- DUEL -->
+    <section id="duel" class="view" hidden>
+      <p class="duel-q">Which is more <span id="duel-mode" class="mode">overrated</span>?</p>
+      <div class="duel-grid">
+        <button class="side" id="duel-a"><span class="thing fit"></span><span class="meta"></span><kbd>&larr;</kbd></button>
+        <span class="vs">vs</span>
+        <button class="side" id="duel-b"><span class="thing fit"></span><span class="meta"></span><kbd>&rarr;</kbd></button>
+      </div>
+      <button class="skip" id="duel-skip">Too close to call <kbd>space</kbd></button>
+      <p class="empty" id="duel-empty" hidden></p>
+    </section>
+
+    <!-- TOP -->
+    <section id="top" class="view" hidden>
+      <div class="tabs" role="tablist">
+        <button role="tab" class="tab over" data-list="overrated" aria-selected="true">Most overrated</button>
+        <button role="tab" class="tab under" data-list="underrated" aria-selected="false">Most underrated</button>
+      </div>
+      <div class="lists">
+        <ol class="toplist over" id="list-overrated"></ol>
+        <ol class="toplist under" id="list-underrated"></ol>
+      </div>
+      <p class="foot" id="top-foot"></p>
+    </section>
+
+    <!-- ADD -->
+    <section id="add" class="view" hidden>
+      <form id="add-form" autocomplete="off">
+        <label for="add-input" class="kicker">Add something to be judged</label>
+        <input id="add-input" name="name" maxlength="60" placeholder="Anything." required>
+        <p class="hint" id="add-msg">A food, a film, a city, a habit, a person&hellip; in English, up to 60 characters.</p>
+        <button type="submit" class="go">Add it &rarr;</button>
+      </form>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

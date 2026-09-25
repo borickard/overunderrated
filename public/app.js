@@ -75,26 +75,53 @@ document.addEventListener('click', (e) => {
 addEventListener('popstate', () => show(viewFromPath(location.pathname), false));
 
 /* ---------------- Rate ---------------- */
+// Things to rate are fetched ahead in batches and votes are saved in the
+// background, so a vote never waits on the network and no click is dropped.
 const Rate = (() => {
   const stage = $('.stage');
   const resultEl = $('#rate-result');
   const choices = $('.choices');
   const SWAP_MS = 260; // keep in sync with --swap in style.css
+  const BATCH = 12;
+  const LOW_WATER = 8;
   let nameEl = $('#rate-name');
-  let item = null;
-  let upcoming = null; // promise of the next /api/next response, fetched ahead
-  let busy = false;
+  let item = null; // { id, name, fresh }
+  let queue = [];
+  let recent = []; // ids voted or skipped lately, so refills don't bring them back
+  let refilling = null;
+  let lastError = null;
+  let waiting = false; // only while the queue is empty and a refill is in flight
   let loaded = false;
-
-  const fetchNext = (exclude) => api('/api/next?exclude=' + exclude.filter(Boolean).join(','));
+  let leaving = null;
 
   function size(el = nameEl) {
     if (current !== 'rate') return;
     fit(el, { maxH: innerHeight * 0.42, max: Math.min(320, Math.max(innerWidth * 0.2, 120)) });
   }
 
-  function label(data) {
-    return data.item ? data.item.name : data.error ? 'Hold on.' : 'Nothing here yet.';
+  function refill() {
+    refilling ??= (async () => {
+      const ask = (ids) => api(`/api/next?count=${BATCH}&exclude=${ids.filter(Boolean).join(',')}`);
+      const mine = [item?.id, ...queue.map((x) => x.id)];
+      let data = await ask([...mine, ...recent]);
+      // Everything is rated and we excluded it all: allow re-rating older ones.
+      if (!data.error && !data.fresh && !data.items?.length) {
+        recent = recent.slice(0, 1);
+        data = await ask([...mine, ...recent]);
+      }
+      if (data.error) {
+        lastError = data.error;
+        return;
+      }
+      lastError = null;
+      const have = new Set([item?.id, ...queue.map((x) => x.id)]);
+      for (const it of data.items || []) if (!have.has(it.id)) queue.push({ ...it, fresh: data.fresh });
+    })().finally(() => (refilling = null));
+    return refilling;
+  }
+
+  function topUp() {
+    if (queue.length < LOW_WATER) refill();
   }
 
   function note(text) {
@@ -106,11 +133,6 @@ const Rate = (() => {
     resultEl.append(p);
   }
 
-  function statusNote(data) {
-    if (data.error) note(data.error);
-    else if (data.item && !data.fresh) note('You have rated everything. Change your mind, or add something new.');
-  }
-
   // Crowd result for the thing you just voted on. Static, so it never slows you down.
   function showResult(it) {
     resultEl.innerHTML = `
@@ -119,72 +141,85 @@ const Rate = (() => {
     $('.last b', resultEl).textContent = it.name;
   }
 
-  // Old name drops down and fades out while the new one drops in from above, at the same time.
-  function swapTo(data) {
+  function label() {
+    return item ? item.name : lastError ? 'Hold on.' : 'Nothing here yet.';
+  }
+
+  // Old name drops down and fades out while the new one drops in from above,
+  // at the same time. A new swap cuts any unfinished one short.
+  function swapIn() {
+    leaving?.remove();
     const old = nameEl;
     const next = old.cloneNode(false);
-    next.removeAttribute('id');
-    next.textContent = label(data);
-    old.removeAttribute('id');
-    next.id = 'rate-name';
-
+    next.className = 'thing fit';
+    next.textContent = label();
     const box = old.getBoundingClientRect();
     const parent = stage.getBoundingClientRect();
-    old.style.position = 'absolute';
-    old.style.left = box.left - parent.left + 'px';
-    old.style.top = box.top - parent.top + 'px';
-    old.style.width = box.width + 'px';
-    old.style.margin = '0';
+    old.removeAttribute('id');
+    old.classList.remove('enter');
+    Object.assign(old.style, {
+      position: 'absolute',
+      left: box.left - parent.left + 'px',
+      top: box.top - parent.top + 'px',
+      width: box.width + 'px',
+      margin: '0',
+    });
     old.classList.add('leave');
     old.after(next);
     nameEl = next;
+    leaving = old;
     size(next);
     next.classList.add('enter');
     setTimeout(() => {
       old.remove();
+      if (leaving === old) leaving = null;
       next.classList.remove('enter');
     }, SWAP_MS);
   }
 
-  async function advance(prevId) {
-    const data = await upcoming;
-    item = data.item;
-    swapTo(data);
-    upcoming = fetchNext([item?.id, prevId]);
-    return data;
+  async function advance() {
+    if (item) recent = [item.id, ...recent].slice(0, 60);
+    if (!queue.length) {
+      waiting = true;
+      await refill();
+      if (!queue.length) await refill(); // everything excluded once; try again
+      waiting = false;
+    }
+    item = queue.shift() || null;
+    swapIn();
+    if (!item && lastError) note(lastError);
+    else if (item && !item.fresh) note('You have rated everything. Change your mind, or add something new.');
+    topUp();
   }
 
   async function load() {
-    const data = await fetchNext([]);
-    item = data.item;
-    nameEl.textContent = label(data);
-    statusNote(data);
+    await refill();
+    item = queue.shift() || null;
+    nameEl.textContent = label();
+    if (lastError) note(lastError);
     size();
-    upcoming = fetchNext([item?.id]);
+    topUp();
   }
 
-  async function vote(dir) {
-    if (busy || !item) return;
-    busy = true;
+  function vote(dir) {
+    if (waiting || !item) return;
     const prev = item;
     const button = $(`.choice[data-dir="${dir}"]`, choices);
     button.classList.add('picked');
-    setTimeout(() => button.classList.remove('picked'), 160);
-    const saved = api('/api/vote', { id: prev.id, dir });
-    const data = await advance(prev.id);
-    statusNote(data);
-    setTimeout(() => (busy = false), SWAP_MS * 0.6);
-    const res = await saved;
-    if (res.error) toast(res.error);
-    else if (item !== prev && !data.error) showResult(res.item);
+    setTimeout(() => button.classList.remove('picked'), 140);
+    note('');
+    api('/api/vote', { id: prev.id, dir }).then((res) => {
+      if (res.error) toast(res.error);
+      // Only show it if nothing newer has been voted on since.
+      else if (recent[0] === prev.id) showResult(res.item);
+    });
+    advance();
   }
 
-  async function skip() {
-    if (busy || !item) return;
-    busy = true;
+  function skip() {
+    if (waiting || !item) return;
     note('');
-    statusNote(await advance(item.id));
-    setTimeout(() => (busy = false), SWAP_MS * 0.6);
+    advance();
   }
 
   choices.addEventListener('click', (e) => {
@@ -207,27 +242,22 @@ const Rate = (() => {
 })();
 
 /* ---------------- Duel ---------------- */
+// The next pair is fetched while you look at the current one, and picks are
+// saved in the background.
 const Duel = (() => {
   const root = $('#duel');
   const grid = $('.duel-grid');
   const emptyEl = $('#duel-empty');
   const sides = { a: $('#duel-a'), b: $('#duel-b') };
   let pair = null;
-  let busy = false;
-  let seq = 0; // ignore responses that arrive after the question was switched
+  let upcoming = null; // promise of the next pair for the current mode
+  let seq = 0; // bumps when the mode changes, so stale pairs are dropped
+  let waiting = false;
   let mode = 'over';
   try { if (localStorage.getItem('duelMode') === 'under') mode = 'under'; } catch {}
 
-  function setMode(m, reload = true) {
-    if (m !== 'over' && m !== 'under') return;
-    const changed = m !== mode;
-    mode = m;
-    try { localStorage.setItem('duelMode', m); } catch {}
-    $$('.mode-switch .mode').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
-    root.classList.toggle('over', m === 'over');
-    root.classList.toggle('under', m === 'under');
-    if (reload && changed) load();
-  }
+  const key = (p) => `${Math.min(p.a.id, p.b.id)}:${Math.max(p.a.id, p.b.id)}`;
+  const fetchPair = (avoid = '') => api(`/api/duel?mode=${mode}&avoid=${avoid}`);
 
   function meta(it) {
     if (!it.votes) return 'No votes yet';
@@ -247,11 +277,7 @@ const Duel = (() => {
     }
   }
 
-  async function load() {
-    const mine = ++seq;
-    const data = await api('/api/duel?mode=' + mode);
-    if (mine !== seq) return;
-    grid.classList.remove('done');
+  function render(data) {
     Object.values(sides).forEach((s) => s.classList.remove('picked'));
     if (data.error) {
       pair = null;
@@ -270,27 +296,56 @@ const Duel = (() => {
       $('.meta', sides[k]).textContent = meta(data[k]);
     }
     size();
+    upcoming = fetchPair(key(data));
   }
 
-  async function pick(k) {
-    if (busy || !pair) return;
-    busy = true;
-    sides[k].classList.add('picked');
-    grid.classList.add('done');
-    const data = await api('/api/duel', { a: pair.a.id, b: pair.b.id, winner: pair[k].id, mode: pair.mode });
-    if (data.error) toast(data.error);
-    await load();
-    busy = false;
+  async function show(promise) {
+    const mine = seq;
+    waiting = true;
+    const data = await promise;
+    waiting = false;
+    if (mine === seq) render(data);
+  }
+
+  function setMode(m, reload = true) {
+    if (m !== 'over' && m !== 'under') return;
+    const changed = m !== mode;
+    mode = m;
+    try { localStorage.setItem('duelMode', m); } catch {}
+    $$('.mode-switch .mode').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
+    root.classList.toggle('over', m === 'over');
+    root.classList.toggle('under', m === 'under');
+    if (reload && changed) {
+      seq++;
+      upcoming = null;
+      show(fetchPair());
+    }
+  }
+
+  function advance() {
+    show(upcoming || fetchPair(pair ? key(pair) : ''));
+  }
+
+  function pick(k) {
+    if (waiting || !pair) return;
+    const p = pair;
+    api('/api/duel', { a: p.a.id, b: p.b.id, winner: p[k].id, mode }).then((res) => res.error && toast(res.error));
+    advance();
   }
 
   sides.a.addEventListener('click', () => pick('a'));
   sides.b.addEventListener('click', () => pick('b'));
-  $('#duel-skip').addEventListener('click', () => !busy && load());
+  $('#duel-skip').addEventListener('click', () => !waiting && advance());
   $$('.mode-switch .mode').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
   setMode(mode, false);
 
   return {
-    enter: load,
+    // Always start from a fresh pair: ratings may have moved since last time.
+    enter() {
+      seq++;
+      upcoming = null;
+      show(fetchPair());
+    },
     key(k) {
       if (k === 'ArrowLeft' || k === 'ArrowUp') pick('a');
       else if (k === 'ArrowRight' || k === 'ArrowDown') pick('b');

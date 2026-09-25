@@ -267,7 +267,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #duel.over .side.picked { background: var(--over); color: var(--over-ink); box-shadow: none; }
 #duel.under .side.picked { background: var(--under); color: var(--under-ink); box-shadow: none; }
 .side.picked .meta { color: inherit; opacity: .8; }
-.duel-grid.done .side:not(.picked) { opacity: .35; }
 @media (max-width: 720px) {
   .duel-grid { grid-template-columns: 1fr; grid-template-rows: 1fr auto 1fr; }
   .side { min-height: 26vh; }

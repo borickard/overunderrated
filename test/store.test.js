@@ -26,6 +26,12 @@ async function pglite() {
     kind: 'postgres',
     schema: db.PG_SCHEMA,
     query: async (text, params = []) => (await pg.query(text, params)).rows,
+    // Mirrors Neon's sql.transaction(): all statements in one transaction.
+    batch: (list) => pg.transaction(async (tx) => {
+      const out = [];
+      for (const [text, params = []] of list) out.push((await tx.query(text, params)).rows);
+      return out;
+    }),
   };
 }
 
@@ -78,9 +84,23 @@ for (const [kind, make] of Object.entries(backends)) {
     const a = (await s.add('Alpha')).item;
     const b = (await s.add('Bravo')).item;
     await s.vote('v', a.id, 1);
-    assert.equal((await s.next('v')).item.id, b.id);
+    assert.deepEqual((await s.next('v')).items.map((x) => x.id), [b.id]);
     await s.vote('v', b.id, 1);
-    assert.equal((await s.next('v')).fresh, false);
+    const done = await s.next('v', [], 5);
+    assert.equal(done.fresh, false);
+    assert.equal(done.items.length, 2);
+  });
+
+  test(`${kind}: next returns a batch, skipping excluded ids`, async () => {
+    const s = await fresh();
+    const ids = [];
+    for (const n of ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot']) ids.push((await s.add(n)).item.id);
+    const r = await s.next('v', [ids[0], ids[1]], 3);
+    assert.equal(r.fresh, true);
+    assert.equal(r.items.length, 3);
+    assert.equal(new Set(r.items.map((x) => x.id)).size, 3);
+    assert.ok(r.items.every((x) => !ids.slice(0, 2).includes(x.id) && typeof x.name === 'string'));
+    assert.equal((await s.next('v', [], 100)).items.length, 6);
   });
 
   test(`${kind}: toplists split by lean`, async () => {

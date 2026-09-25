@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Admin · Overrated / Underrated</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body class="admin">
+  <header class="bar">
+    <a class="logo" href="/"><span class="o">Over</span>/<span class="u">Under</span></a>
+    <nav>
+      <span class="admin-tag">Admin</span>
+      <button class="link" id="logout" hidden>Log out</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="view" id="login">
+      <form id="login-form" class="login">
+        <label for="token" class="kicker">Admin password</label>
+        <input id="token" type="password" autocomplete="current-password" required>
+        <p class="hint" id="login-msg">The value of <code>ADMIN_TOKEN</code> in your Vercel environment.</p>
+        <button class="go" type="submit">Log in &rarr;</button>
+      </form>
+    </section>
+
+    <section class="view" id="panel" hidden>
+      <div class="admin-tabs">
+        <button class="pill active" data-tab="items">Things</button>
+        <button class="pill" data-tab="blocked">Blocked submitters</button>
+      </div>
+
+      <div id="tab-items">
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Search things…" autocomplete="off">
+          <span class="count" id="count"></span>
+        </div>
+        <ul class="rows" id="rows"></ul>
+        <button class="skip" id="more" hidden>Load more</button>
+      </div>
+
+      <div id="tab-blocked" hidden>
+        <ul class="rows" id="blocked-rows"></ul>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/admin.js"></script>
+</body>
+</html>

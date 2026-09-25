@@ -23,7 +23,8 @@ const MIME = {
 
 function serveStatic(req, res, url) {
   let rel = decodeURIComponent(url.pathname);
-  if (rel === '/' || !path.extname(rel)) rel = '/index.html'; // SPA routes
+  if (rel === '/admin') rel = '/admin.html';
+  else if (rel === '/' || !path.extname(rel)) rel = '/index.html'; // SPA routes
   const file = path.join(PUBLIC_DIR, path.normalize(rel));
   if (!file.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403);

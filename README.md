@@ -6,6 +6,7 @@ A crowd game: anyone adds a thing, everyone else votes whether it's **overrated*
 - **Duel** — pick the question, *"Which is more overrated?"* or *"Which is more underrated?"* (`o` / `u`), then choose between two things that sit close together on that side of the ranking. This fine-tunes the order when the votes are close.
 - **Top** — most overrated and most underrated, ranked.
 - **Add** — anything in English, up to 60 characters. Near-duplicates (`The Beatles` / `beatles!`) are merged.
+- **Top** shows both lists side by side on wide screens and as tabs on phones.
 
 ## Deploy on Vercel
 
@@ -15,6 +16,19 @@ The site is static files in `public/` plus serverless functions in `api/`. Votes
 2. Redeploy. Tables are created and 30 starter things are seeded on the first request.
 
 Without a database the API answers `503` with a message saying so, and the page shows it.
+
+## Moderation
+
+**Filter.** New submissions are checked against a small list of slurs, profanity and hate/sexual terms (`lib/moderation.js`), including disguises like `f4ck`, `$h1t`, `f.u.c.k` and `fuuuck`. Short or ambiguous words only match as whole words, so `Scunthorpe`, `Class` or `Dick Van Dyke` are fine. A word list can't judge meaning, so anything that slips through is handled by hand.
+
+**Admin page.** Set an `ADMIN_TOKEN` environment variable in Vercel (Settings → Environment Variables; use a long random string) and redeploy. Then open `/admin` and log in with that value. From there you can:
+
+- see everything, newest first, with votes, who added it (an anonymous browser id) and whether the filter would flag it
+- search, rename or delete things (deleting removes their votes and duels)
+- block a submitter and delete everything they added; blocked browsers can still vote but can't add things
+- unblock from the *Blocked submitters* tab
+
+Without `ADMIN_TOKEN` the admin API is switched off. Failed logins are rate-limited.
 
 ## Run locally
 
@@ -41,11 +55,12 @@ Each browser gets an anonymous cookie; one vote per thing per browser (you can c
 
 ```
 api/             Vercel serverless entry points (one per route, all share lib/api.js)
-lib/api.js       Request handling, anonymous voter cookie, rate limiting
+lib/api.js       Request handling, anonymous voter cookie, rate limiting, admin auth
+lib/moderation.js  Offensive-submission filter
 lib/store.js     Validation, scoring, matchmaking, SQL
 lib/db.js        Postgres (Neon serverless driver) / SQLite adapter and schema
 local-server.js  Local dev server: static files + the same API handler
-public/          Single-page frontend (vanilla JS/CSS), self-hosted Bricolage Grotesque (OFL)
+public/          Single-page frontend (vanilla JS/CSS), admin page, self-hosted Bricolage Grotesque (OFL)
 test/            node:test tests for the store, run on both databases
 ```
 

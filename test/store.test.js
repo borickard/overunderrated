@@ -165,4 +165,40 @@ for (const [kind, make] of Object.entries(backends)) {
       assert.ok(under.includes(u.a.id) && under.includes(u.b.id));
     }
   });
+
+  test(`${kind}: rejects offensive submissions`, async () => {
+    const s = await fresh();
+    assert.ok((await s.add('F.u.c.k this', 'u1')).error);
+    assert.ok((await s.add('Scunthorpe', 'u1')).item);
+  });
+
+  test(`${kind}: admin can list, rename, delete and block`, async () => {
+    const s = await fresh();
+    const a = (await s.add('Spam one', 'spammer')).item;
+    await s.add('Spam two', 'spammer');
+    const good = (await s.add('Good thing', 'nice')).item;
+    await s.vote('v', a.id, 1);
+
+    let list = await s.adminList();
+    assert.equal(list.total, 3);
+    assert.equal(list.items[0].name, 'Good thing'); // newest first
+    assert.equal(list.items.find((x) => x.id === a.id).votes, 1);
+    assert.equal((await s.adminList({ search: 'spam' })).total, 2);
+    assert.equal((await s.adminList({ search: '100%_' })).total, 0);
+
+    assert.ok((await s.adminRename(good.id, 'Spam one')).error); // name taken
+    assert.ok((await s.adminRename(good.id, 'Great thing')).ok);
+    assert.ok((await s.adminDelete(a.id)).ok);
+    assert.ok((await s.adminDelete(a.id)).error);
+
+    const blocked = await s.adminBlock('spammer', { purge: true });
+    assert.deepEqual(blocked, { ok: true, removed: 1 });
+    assert.ok((await s.add('Spam three', 'spammer')).error);
+    list = await s.adminList();
+    assert.deepEqual(list.items.map((x) => x.name), ['Great thing']);
+    assert.equal((await s.adminBlocked()).blocked[0].voter, 'spammer');
+    await s.adminUnblock('spammer');
+    assert.ok((await s.add('Spam three', 'spammer')).item);
+    assert.ok((await s.adminBlock('seed')).error);
+  });
 }

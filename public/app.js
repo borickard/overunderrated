@@ -421,8 +421,9 @@ const Top = (() => {
   function select(w) {
     which = w;
     $$('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.list === w)));
-    $('#list-overrated').hidden = w !== 'overrated';
-    $('#list-underrated').hidden = w !== 'underrated';
+    // On wide screens both columns show and the tabs are hidden (see CSS).
+    $('#col-overrated').hidden = w !== 'overrated';
+    $('#col-underrated').hidden = w !== 'underrated';
   }
 
   $$('.tab').forEach((t) => t.addEventListener('click', () => select(t.dataset.list)));

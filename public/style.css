@@ -210,6 +210,13 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 }
 .skip:hover { color: var(--ink); }
 
+/* Waiting for something to show: muted text, buttons greyed out and inert. */
+.thing.loading, .duel-grid.loading .thing { color: var(--line); }
+.choices.loading .choice { filter: grayscale(1) opacity(.3); pointer-events: none; }
+.duel-grid.loading .side { pointer-events: none; }
+.duel-grid.loading .meta { visibility: hidden; }
+.skip:disabled { opacity: .35; pointer-events: none; }
+
 /* ---------- Duel ---------- */
 .duel-q {
   margin: 1vh 0 2.4vh;

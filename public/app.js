@@ -51,6 +51,12 @@ function fit(el, { maxH, maxW, max = 240, min = 28 } = {}) {
   el.style.width = '';
 }
 
+// Run `onSlow` only if `promise` takes longer than `ms`, so fast loads don't flicker.
+function whenSlow(promise, onSlow, ms = 150) {
+  const t = setTimeout(onSlow, ms);
+  return promise.finally(() => clearTimeout(t));
+}
+
 /* ---------------- Router ---------------- */
 const views = { rate: '/', duel: '/duel', top: '/top', add: '/add' };
 let current = null;
@@ -147,6 +153,28 @@ const Rate = (() => {
     return item ? item.name : lastError ? 'Hold on.' : 'Nothing here yet.';
   }
 
+  function setLoading(on) {
+    choices.classList.toggle('loading', on);
+    $('#rate-skip').disabled = on;
+    nameEl.classList.toggle('loading', on);
+    if (on) nameEl.textContent = 'Loading…';
+  }
+
+  // Fill the queue, showing "Loading…" if that takes a moment. An empty answer
+  // is retried once before we conclude there is nothing to rate.
+  async function fill() {
+    waiting = true;
+    await whenSlow(refill(), () => {
+      if (waiting) {
+        setLoading(true);
+        size();
+      }
+    });
+    if (!queue.length && !lastError) await refill();
+    waiting = false;
+    setLoading(false);
+  }
+
   // Old name drops down and fades out while the new one drops in from above,
   // at the same time. A new swap cuts any unfinished one short.
   function swapIn() {
@@ -182,10 +210,8 @@ const Rate = (() => {
   async function advance() {
     if (item) recent = [item.id, ...recent].slice(0, 60);
     if (!queue.length) {
-      waiting = true;
-      await refill();
-      if (!queue.length) await refill(); // everything excluded once; try again
-      waiting = false;
+      item = null;
+      await fill();
     }
     item = queue.shift() || null;
     swapIn();
@@ -195,7 +221,8 @@ const Rate = (() => {
   }
 
   async function load() {
-    await refill();
+    setLoading(true);
+    await fill();
     item = queue.shift() || null;
     nameEl.textContent = label();
     if (lastError) note(lastError);
@@ -268,7 +295,7 @@ const Duel = (() => {
   }
 
   function size() {
-    if (current !== 'duel' || !pair) return;
+    if (current !== 'duel') return;
     const stacked = innerWidth <= 720;
     for (const s of Object.values(sides)) {
       const t = $('.thing', s);
@@ -301,12 +328,24 @@ const Duel = (() => {
     upcoming = fetchPair(key(data));
   }
 
+  function setLoading(on) {
+    grid.classList.toggle('loading', on);
+    $('#duel-skip').disabled = on;
+    for (const s of Object.values(sides)) {
+      s.disabled = on;
+      if (on) $('.thing', s).textContent = 'Loading…';
+    }
+    if (on) size();
+  }
+
   async function show(promise) {
     const mine = seq;
     waiting = true;
-    const data = await promise;
+    const data = await whenSlow(promise, () => mine === seq && setLoading(true));
+    if (mine !== seq) return;
     waiting = false;
-    if (mine === seq) render(data);
+    setLoading(false);
+    render(data);
   }
 
   function setMode(m, reload = true) {

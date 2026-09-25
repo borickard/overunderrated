@@ -25,14 +25,14 @@
     <section id="rate" class="view" hidden>
       <div class="stage">
         <p class="kicker">Is it&hellip;</p>
-        <h1 class="thing fit" id="rate-name">&nbsp;</h1>
+        <h1 class="thing fit loading" id="rate-name">Loading…</h1>
         <div class="result" id="rate-result" aria-live="polite"></div>
       </div>
-      <div class="choices">
+      <div class="choices loading">
         <button class="choice over" data-dir="1"><span class="arrow">&uarr;</span><span class="label">Overrated</span><kbd>&larr;</kbd></button>
         <button class="choice under" data-dir="-1"><span class="arrow">&darr;</span><span class="label">Underrated</span><kbd>&rarr;</kbd></button>
       </div>
-      <button class="skip" id="rate-skip">Skip <kbd>space</kbd></button>
+      <button class="skip" id="rate-skip" disabled>Skip <kbd>space</kbd></button>
     </section>
 
     <!-- DUEL -->
@@ -42,10 +42,10 @@
         <span class="mode-switch" role="radiogroup" aria-label="Question">
           <button role="radio" class="mode over" data-mode="over" aria-checked="true">overrated</button><button role="radio" class="mode under" data-mode="under" aria-checked="false">underrated</button></span>?
       </div>
-      <div class="duel-grid">
-        <button class="side" id="duel-a"><span class="thing fit"></span><span class="meta"></span><kbd>&larr;</kbd></button>
+      <div class="duel-grid loading">
+        <button class="side" id="duel-a" disabled><span class="thing fit">Loading…</span><span class="meta"></span><kbd>&larr;</kbd></button>
         <span class="vs">vs</span>
-        <button class="side" id="duel-b"><span class="thing fit"></span><span class="meta"></span><kbd>&rarr;</kbd></button>
+        <button class="side" id="duel-b" disabled><span class="thing fit">Loading…</span><span class="meta"></span><kbd>&rarr;</kbd></button>
       </div>
       <button class="skip" id="duel-skip">Too close to call <kbd>space</kbd></button>
       <p class="empty" id="duel-empty" hidden></p>

@@ -35,8 +35,10 @@ function fit(el, { maxH, maxW, max = 240, min = 28 } = {}) {
   el.style.width = Math.floor(w * 0.97) + 'px';
   el.style.overflowWrap = 'normal';
   el.style.maxHeight = 'none';
-  let lo = min, hi = max;
-  while (hi - lo > 1) {
+  // Whole-pixel bounds: with a fractional max, (lo + hi) >> 1 can equal lo
+  // forever. The iteration cap is a second guard against hanging the page.
+  let lo = Math.floor(min), hi = Math.max(lo, Math.floor(max));
+  for (let i = 0; i < 16 && hi - lo > 1; i++) {
     const mid = (lo + hi) >> 1;
     el.style.fontSize = mid + 'px';
     if (el.scrollWidth <= el.clientWidth && el.scrollHeight <= h) lo = mid;
